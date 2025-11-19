@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Set
+from dataclasses import dataclass, field
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 from ..clients import PikalyticsClient, PokeAPIClient
 from ..clients.pikalytics import PokemonMeta
@@ -58,6 +58,7 @@ class PokemonContext:
     pokemon: str
     types: List[str]
     meta: Optional[PokemonMeta]
+    move_data: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
 class TeamAnalyzer:
@@ -75,6 +76,7 @@ class TeamAnalyzer:
         self.pikalytics = pikalytics_client or PikalyticsClient()
         self.format_slug = format_slug
         self.ladder_threat_limit = ladder_threat_limit
+        self.move_cache: Dict[str, Dict[str, Any]] = {}
 
     def analyze(self, team: Team) -> TeamReport:
         report, _ = self.analyze_with_context(team)
@@ -128,6 +130,7 @@ class TeamAnalyzer:
             species = pokemon.species or pokemon.name
             types: List[str] = []
             meta: Optional[PokemonMeta] = None
+            move_data: Dict[str, Dict[str, Any]] = {}
             try:
                 types = self.pokeapi.get_pokemon_types(species)
             except Exception:  # pragma: no cover - network failures
@@ -136,7 +139,28 @@ class TeamAnalyzer:
                 meta = self.pikalytics.fetch_pokemon(self.format_slug, species)
             except Exception:  # pragma: no cover - network failures
                 meta = None
-            contexts.append(PokemonContext(pokemon=pokemon.name, types=types, meta=meta))
+            for move in pokemon.moves:
+                slug = move.strip().lower()
+                if not slug:
+                    continue
+                cached = self.move_cache.get(slug)
+                if cached:
+                    move_data[slug] = cached
+                    continue
+                try:
+                    data = self.pokeapi.get_move_data(move)
+                except Exception:
+                    data = self._fallback_move_data(move)
+                self.move_cache[slug] = data
+                move_data[slug] = data
+            contexts.append(
+                PokemonContext(
+                    pokemon=pokemon.name,
+                    types=types,
+                    meta=meta,
+                    move_data=move_data,
+                )
+            )
         return contexts
 
     # ------------------------------------------------------------------
@@ -328,7 +352,7 @@ class TeamAnalyzer:
                     if (
                         own_speed is not None
                         and threat_speed - own_speed >= 10
-                        and self._infer_role(pokemon) != "Speed control"
+                        and self._infer_role(pokemon, ctx) != "Speed control"
                     ):
                         speed_targets.append(pokemon.name)
 
@@ -374,7 +398,7 @@ class TeamAnalyzer:
         context_map = {ctx.pokemon: ctx for ctx in contexts}
         for pokemon in team.pokemon:
             ctx = context_map.get(pokemon.name)
-            role = self._infer_role(pokemon)
+            role = self._infer_role(pokemon, ctx)
             strengths: List[str] = []
             risks: List[str] = []
             if ctx and ctx.meta and ctx.meta.usage_percent:
@@ -405,15 +429,77 @@ class TeamAnalyzer:
             )
         return insights
 
-    def _infer_role(self, pokemon) -> Optional[str]:
-        move_set = {move.lower() for move in pokemon.moves}
-        if move_set & SPEED_CONTROL_MOVES:
+    def _infer_role(self, pokemon, context: Optional[PokemonContext] = None) -> Optional[str]:
+        move_data = context.move_data if context else {}
+        types = {t.lower() for t in (context.types if context else [])}
+        has_speed_control = False
+        has_support = False
+        has_attacker = False
+        has_setup = False
+
+        for move in pokemon.moves:
+            slug = move.strip().lower()
+            if not slug:
+                continue
+            data = move_data.get(slug)
+            if not data:
+                continue
+            priority = data.get("priority") or 0
+            if priority > 0:
+                has_speed_control = True
+            stat_changes = data.get("stat_changes") or []
+            for change in stat_changes:
+                stat_name = (change.get("stat") or "").lower()
+                delta = change.get("change") or 0
+                if stat_name == "speed" and delta != 0:
+                    has_speed_control = True
+                if stat_name in {"attack", "special-attack"} and delta > 0:
+                    has_setup = True
+            meta = data.get("meta") or {}
+            ailment = (meta.get("ailment") or "").lower()
+            if ailment in {"paralysis"}:
+                has_speed_control = True
+            if data.get("damage_class") == "status":
+                positive_boost = any(
+                    (change.get("stat") or "").lower() in {"attack", "special-attack", "speed"}
+                    and (change.get("change") or 0) > 0
+                    for change in stat_changes
+                )
+                if not positive_boost:
+                    has_support = True
+                else:
+                    has_setup = True
+            if ailment in {"burn", "paralysis", "poison", "sleep", "confusion"}:
+                has_support = True
+            base_power = data.get("base_power")
+            move_type = (data.get("type") or "").lower()
+            if (
+                types
+                and move_type in types
+                and isinstance(base_power, (int, float))
+                and base_power >= 75
+            ):
+                has_attacker = True
+
+        if has_speed_control:
             return "Speed control"
-        if move_set & SUPPORT_MOVES:
-            return "Utility support"
-        if any(move.lower() in {"dragon claw", "armor cannon", "play rough"} for move in pokemon.moves):
+        if has_attacker or has_setup:
             return "Primary attacker"
+        if has_support:
+            return "Utility support"
         return None
+
+    @staticmethod
+    def _fallback_move_data(move_name: str) -> Dict[str, Any]:
+        return {
+            "name": move_name,
+            "type": None,
+            "damage_class": None,
+            "priority": 0,
+            "base_power": None,
+            "meta": {},
+            "stat_changes": [],
+        }
 
     def _get_base_speed(self, pokemon) -> Optional[int]:
         species = pokemon.species or pokemon.name

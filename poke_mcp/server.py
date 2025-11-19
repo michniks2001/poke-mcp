@@ -51,4 +51,9 @@ def analyze_smogon_team(
 def run() -> None:
     """Entry point for `python -m poke_mcp.server` or console script."""
 
+    print("[poke-mcp] Starting MCP server. Press Ctrl+C to stop.")
     app.run()
+
+
+if __name__ == "__main__":
+    run()
