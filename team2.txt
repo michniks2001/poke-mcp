@@ -1,0 +1,62 @@
+Torkoal @ Eject Button  
+Ability: Drought  
+Tera Type: Fairy  
+EVs: 248 HP / 8 SpA / 252 SpD  
+Calm Nature  
+IVs: 0 Atk  
+- Eruption  
+- Protect  
+- Heat Wave  
+- Will-O-Wisp  
+
+Hawlucha @ Power Herb  
+Ability: Unburden  
+Tera Type: Flying  
+EVs: 252 Atk / 4 SpD / 252 Spe  
+Adamant Nature  
+- Sky Attack  
+- Acrobatics  
+- Flying Press  
+- Protect  
+
+Ogerpon-Cornerstone (F) @ Cornerstone Mask  
+Ability: Sturdy  
+Tera Type: Rock  
+EVs: 252 Atk / 4 SpD / 252 Spe  
+Jolly Nature  
+- Quick Attack  
+- Stomping Tantrum  
+- Ivy Cudgel  
+- Protect  
+
+Grimmsnarl @ Leftovers  
+Ability: Prankster  
+Tera Type: Fairy  
+EVs: 252 HP / 252 Atk / 4 SpD  
+Adamant Nature  
+- Parting Shot  
+- Taunt  
+- Fake Out  
+- Spirit Break  
+
+Walking Wake @ Booster Energy  
+Ability: Protosynthesis  
+Tera Type: Dragon  
+EVs: 252 SpA / 4 SpD / 252 Spe  
+Modest Nature  
+IVs: 0 Atk  
+- Hydro Steam  
+- Dragon Pulse  
+- Weather Ball  
+- Protect  
+
+Polteageist @ White Herb  
+Ability: Weak Armor  
+Tera Type: Grass  
+EVs: 252 SpA / 4 SpD / 252 Spe  
+Modest Nature  
+IVs: 0 Atk  
+- Shell Smash  
+- Giga Drain  
+- Shadow Ball  
+- Protect

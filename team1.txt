@@ -1,0 +1,65 @@
+Hatterene @ Safety Goggles  
+Ability: Magic Bounce  
+Tera Type: Fairy  
+EVs: 252 HP / 4 SpA / 252 SpD  
+Sassy Nature  
+IVs: 0 Atk / 0 Spe  
+- Trick Room  
+- Reflect  
+- Dazzling Gleam  
+- Heal Pulse  
+
+Amoonguss @ Leftovers  
+Ability: Effect Spore  
+Tera Type: Steel  
+EVs: 252 HP / 4 SpA / 252 SpD  
+Sassy Nature  
+IVs: 0 Atk / 0 Spe  
+- Foul Play  
+- Clear Smog  
+- Rage Powder  
+- Spore  
+
+Armarouge @ White Herb  
+Ability: Weak Armor  
+Tera Type: Fire  
+EVs: 252 HP / 4 SpA / 252 SpD  
+Sassy Nature  
+IVs: 0 Atk / 0 Spe  
+- Armor Cannon  
+- Will-O-Wisp  
+- Psychic  
+- Protect  
+
+Tornadus @ Covert Cloak  
+Ability: Prankster  
+Tera Type: Ground  
+EVs: 252 SpA / 4 SpD / 252 Spe  
+Timid Nature  
+IVs: 0 Atk  
+- Taunt  
+- Substitute  
+- Bleakwind Storm  
+- Sludge Bomb  
+
+Dragonite @ Sitrus Berry  
+Ability: Multiscale  
+Tera Type: Normal  
+EVs: 252 HP / 252 Atk / 4 SpD  
+Brave Nature  
+IVs: 0 Spe  
+- Extreme Speed  
+- Dragon Claw  
+- Ice Spinner  
+- Aqua Jet  
+
+Granbull @ Life Orb  
+Ability: Intimidate  
+Tera Type: Fairy  
+EVs: 248 HP / 252 Atk / 8 SpA  
+Brave Nature  
+IVs: 0 Spe  
+- Super Fang  
+- Snarl  
+- Psychic Fangs  
+- Play Rough

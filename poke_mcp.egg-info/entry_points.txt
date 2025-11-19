@@ -1,0 +1,2 @@
+[console_scripts]
+poke-mcp = poke_mcp.server:run

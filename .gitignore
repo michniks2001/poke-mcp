@@ -1,0 +1,33 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+
+# Local configuration
+*.local
+.env
+
+# Cache / data
+*.sqlite3
+*.db
+*.json
+*.pickle
+*.log
+
+# Project-specific
+/data/pikalytics/
+/.pytest_cache/
+/dist/
+/build/
+
+# IDE/editor
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

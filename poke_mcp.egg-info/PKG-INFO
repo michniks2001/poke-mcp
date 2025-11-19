@@ -1,0 +1,70 @@
+Metadata-Version: 2.4
+Name: poke-mcp
+Version: 0.1.0
+Summary: Model Context Protocol server for Pokemon VGC team analysis
+Author-email: Sam <sam@example.com>
+License-Expression: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: requests>=2.32.3
+Requires-Dist: beautifulsoup4>=4.12.3
+Requires-Dist: fastmcp>=0.1.1
+Requires-Dist: google-generativeai>=0.7.2
+Requires-Dist: chromadb>=0.5.5
+Requires-Dist: sentence-transformers>=3.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.3.0; extra == "dev"
+Requires-Dist: ruff>=0.5.7; extra == "dev"
+
+# poke-mcp
+
+Model Context Protocol server for Pokemon VGC team analysis.
+
+## Installation
+```bash
+python -m venv env
+source env/bin/activate
+pip install -r requirements.txt  # or pip install -e .[dev]
+```
+
+(With `pyproject.toml`, you can also use `pip install .` to pull dependencies.)
+
+## CLI Usage
+Analyze a Smogon export from a file:
+```bash
+python main.py path/to/team.txt
+```
+
+Or pipe directly:
+```bash
+cat team.txt | python main.py - --json
+```
+
+Flags:
+- `--format`: Pikalytics format slug (default `gen9vgc2025regh`).
+- `--team-name`: Optional display name stored in the output.
+- `--json`: Emit structured JSON instead of formatted text.
+
+## MCP Server
+The FastMCP server exposes two tools:
+1. `parse_smogon_team` – returns structured `Team` data.
+2. `analyze_smogon_team` – returns full `TeamReport` with threats and insights.
+
+Start the server:
+```bash
+python -m poke_mcp.server
+# or
+poke-mcp
+```
+
+Once running, connect via any MCP-compatible client (e.g., Claude Desktop) and call the tools with your Smogon text.
+
+## Tests
+```bash
+pytest
+```
+
+## Roadmap
+- Enrich TeamAnalyzer with offensive coverage + better recommendations.
+- Cache external API responses offline.
+- Additional fixtures for Pikalytics scraping and TeamAnalyzer regression tests.
