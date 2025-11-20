@@ -65,4 +65,5 @@ class TeamReport:
     pokemon_insights: List[PokemonInsight] = field(default_factory=list)
     coverage_gaps: List[str] = field(default_factory=list)
     recommendations: List[str] = field(default_factory=list)
+    top_weaknesses: List[str] = field(default_factory=list)
     llm_summary: Optional[str] = None

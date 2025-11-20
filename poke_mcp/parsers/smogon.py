@@ -112,5 +112,10 @@ def _value_after_colon(line: str) -> str:
 
 
 def _infer_species(name: str) -> str:
+    match = re.search(r"\(([^)]*)\)", name)
+    if match:
+        candidate = match.group(1).strip()
+        if candidate and candidate.upper() not in {"M", "F"}:
+            return candidate
     cleaned = re.sub(r"\([^)]*\)", "", name).strip()
     return cleaned or name.strip()

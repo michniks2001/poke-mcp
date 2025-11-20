@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 from typing import Any, Callable, Dict, List, Optional
 
 from ..analysis import TeamAnalyzer
 from ..clients import PikalyticsClient
+from ..data.meta_threats import TYPE_META_THREATS
 from ..llm import GeminiClient
 from ..models import Team
 from ..vectorstore import LadderVectorStore
@@ -59,7 +61,8 @@ class AnalysisPipeline:
         docs = self.vector_store.query(query, n_results=self.vector_results)
         if not docs:
             return []
-        return [{"query": query, "matches": docs}]
+        themed = self._build_meta_scouting(report, docs)
+        return themed
 
     def _ensure_vectorstore_synced(self) -> None:
         if self._vector_synced or not self.vector_store or not self.pikalytics:
@@ -94,6 +97,64 @@ class AnalysisPipeline:
         if coverage:
             parts.append("Coverage gaps -> " + coverage)
         return " || ".join(parts)
+
+    def _build_meta_scouting(
+        self, report, docs: List[Dict[str, object]]
+    ) -> List[Dict[str, object]]:
+        ranked = getattr(report, "top_weaknesses", []) or []
+        prioritized = ranked[:2] if ranked else []
+        selected_matches: List[Dict[str, object]] = []
+        suggested_types: List[str] = []
+        for weakness in prioritized:
+            threats = TYPE_META_THREATS.get(weakness, [])
+            for threat in threats:
+                selected_matches.append(
+                    {
+                        "document": threat["name"],
+                        "metadata": {
+                            "types": ",".join(threat.get("types", [])),
+                            "notes": threat.get("notes"),
+                            "weakness": weakness,
+                        },
+                        "distance": None,
+                    }
+                )
+                suggested_types.append(weakness)
+        # if we still don't have matches, fall back to docs (filtered NFEs)
+        if not selected_matches:
+            for doc in docs:
+                parsed = self._parse_doc(doc)
+                if not parsed:
+                    continue
+                if self._is_fully_evolved(parsed["name"]):
+                    selected_matches.append(doc)
+                if len(selected_matches) >= 3:
+                    break
+        else:
+            # add up to two filtered docs for context
+            for doc in docs:
+                parsed = self._parse_doc(doc)
+                if not parsed or not self._is_fully_evolved(parsed["name"]):
+                    continue
+                selected_matches.append(doc)
+                if len(selected_matches) >= 5:
+                    break
+        query_text = "Top threats: " + ", ".join(prioritized) if prioritized else "Meta comps"
+        return [{"query": query_text, "matches": selected_matches}]
+
+    def _parse_doc(self, doc: Dict[str, object]) -> Optional[Dict[str, Any]]:
+        raw = doc.get("document")
+        if isinstance(raw, str):
+            try:
+                return json.loads(raw)
+            except ValueError:
+                return None
+        return None
+
+    def _is_fully_evolved(self, name: str) -> bool:
+        nfe_keywords = {"bronor", "metang", "magby", "floette", "dolliv", "grovyle", "wingull", "pawmo"}
+        slug = name.lower().replace(" ", "").replace("-", "")
+        return slug not in nfe_keywords
 
     def _maybe_run_gemini(
         self,

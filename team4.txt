@@ -1,0 +1,47 @@
+Brute Bonnet @ Sitrus Berry
+Ability: Protosynthesis
+Tera Type: Water
+- Seed Bomb
+- Sucker Punch
+- Spore
+- Rage Powder
+
+Lunala @ Power Herb
+Ability: Shadow Shield
+Tera Type: Water
+- Moongeist Beam
+- Meteor Beam
+- Wide Guard
+- Trick Room
+
+Ursaluna @ Flame Orb
+Ability: Guts
+Tera Type: Ghost
+- Headlong Rush
+- Facade
+- Earthquake
+- Protect
+
+Chi-Yu @ Choice Scarf
+Ability: Beads of Ruin
+Tera Type: Ghost
+- Dark Pulse
+- Heat Wave
+- Overheat
+- Snarl
+
+Koraidon @ Life Orb
+Ability: Orichalcum Pulse
+Tera Type: Fire
+- Close Combat
+- Flare Blitz
+- Flame Charge
+- Protect
+
+Flutter Mane @ Focus Sash
+Ability: Protosynthesis
+Tera Type: Stellar
+- Shadow Ball
+- Moonblast
+- Icy Wind
+- Protect

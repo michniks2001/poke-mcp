@@ -174,6 +174,7 @@ class TeamAnalyzer:
             team, defense_report, offensive_threats, contexts
         )
 
+        ranked_weaknesses: List[str] = defense_report.get("ranked_types", [])[:3]
         summary_bits = [
             f"Detected {len(team.pokemon)} Pokémon",
             f"Top weakness: {defense_report['top_weakness']}" if defense_report["top_weakness"] else "Balanced type chart",
@@ -187,6 +188,7 @@ class TeamAnalyzer:
             pokemon_insights=insights,
             coverage_gaps=defense_report["gap_messages"],
             recommendations=recommendations,
+            top_weaknesses=ranked_weaknesses,
         )
         return report, contexts
 
@@ -267,6 +269,7 @@ class TeamAnalyzer:
         resist_counts: Dict[str, int] = {}
         gap_details: List[tuple[int, str]] = []
         recommendations: List[str] = []
+        ranked_pairs: List[tuple[str, int]] = []
         for attack_type in TYPE_ORDER:
             weak = 0
             resist = 0
@@ -278,6 +281,7 @@ class TeamAnalyzer:
                     resist += 1
             weak_counts[attack_type] = weak
             resist_counts[attack_type] = resist
+            ranked_pairs.append((attack_type, weak))
             if attack_type in RELEVANT_OFFENSIVE_TYPES:
                 if weak >= 3:
                     gap_details.append(
@@ -294,13 +298,18 @@ class TeamAnalyzer:
         gap_messages = [
             msg for _, msg in sorted(gap_details, key=lambda item: item[0], reverse=True)[:3]
         ]
-        top_weakness = max(weak_counts.items(), key=lambda kv: kv[1])[0] if weak_counts else None
+        ranked_types = [
+            t for t, count in sorted(ranked_pairs, key=lambda kv: kv[1], reverse=True)
+            if count > 0 and t in RELEVANT_OFFENSIVE_TYPES
+        ]
+        top_weakness = ranked_types[0] if ranked_types else None
         return {
             "weak_counts": weak_counts,
             "resist_counts": resist_counts,
             "gap_messages": gap_messages,
             "recommendations": list(dict.fromkeys(recommendations)),
             "top_weakness": top_weakness,
+            "ranked_types": ranked_types,
         }
 
     def _type_multiplier(self, defender_types: Iterable[str], attack_type: str) -> float:
