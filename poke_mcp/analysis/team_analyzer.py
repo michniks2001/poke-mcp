@@ -230,16 +230,34 @@ class TeamAnalyzer:
         return contexts
 
     def _resolve_types(self, species: str) -> List[str]:
-        try:
-            return self.pokeapi.get_pokemon_types(species)
-        except Exception:  # pragma: no cover - fallback path
-            if "-" in species:
-                base = species.split("-", 1)[0]
-                try:
-                    return self.pokeapi.get_pokemon_types(base)
-                except Exception:
-                    return []
-            return []
+        candidates: List[str] = []
+        cleaned = species.strip()
+        if cleaned:
+            candidates.append(cleaned)
+        if "(" in cleaned and ")" in cleaned:
+            inner = cleaned.split("(", 1)[1].split(")", 1)[0].strip()
+            if inner:
+                candidates.append(inner)
+        if "-" in cleaned:
+            base = cleaned.split("-", 1)[0].strip()
+            if base:
+                candidates.append(base)
+        if " " in cleaned:
+            tail = cleaned.split()[-1].strip()
+            if tail:
+                candidates.append(tail)
+
+        seen: Set[str] = set()
+        for candidate in candidates:
+            cand = candidate.lower()
+            if cand in seen:
+                continue
+            seen.add(cand)
+            try:
+                return self.pokeapi.get_pokemon_types(candidate)
+            except Exception:  # pragma: no cover - fallback path
+                continue
+        return []
 
     # ------------------------------------------------------------------
     # Defensive coverage
@@ -626,11 +644,13 @@ class TeamAnalyzer:
                 continue
 
             offensive_move_seen = True
-            if types and move_type in types:
-                if base_power >= 100:
-                    has_high_power_stab = True
-                if base_power >= 75:
-                    stab_powerful += 1
+            is_stab = bool(types) and move_type in types
+            if is_stab and base_power >= 100:
+                has_high_power_stab = True
+            if is_stab and base_power >= 75:
+                stab_powerful += 1
+            if not is_stab and base_power >= 120:
+                has_high_power_stab = True
 
         is_primary_attacker = offensive_move_seen and (
             has_high_power_stab
@@ -786,8 +806,9 @@ class TeamAnalyzer:
     @staticmethod
     def _ev_indicates_attacker(pokemon) -> bool:
         offense_ev = max(pokemon.evs.get("atk", 0), pokemon.evs.get("spa", 0))
+        secondary_ev = min(pokemon.evs.get("atk", 0), pokemon.evs.get("spa", 0))
         hp_ev = pokemon.evs.get("hp", 0)
-        return offense_ev >= 200 and hp_ev <= 200
+        return offense_ev >= 160 and (hp_ev <= 200 or secondary_ev >= 80)
 
     @staticmethod
     def _is_physical_attacker(pokemon) -> bool:

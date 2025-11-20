@@ -1,0 +1,72 @@
+autism (Hatterene) @ Leftovers  
+Ability: Magic Bounce  
+Level: 50  
+Tera Type: Ghost  
+EVs: 252 HP / 252 SpA / 4 SpD  
+Quiet Nature  
+IVs: 0 Atk / 0 Spe  
+- Dazzling Gleam  
+- Psychic  
+- Trick Room  
+- Mystical Fire  
+
+rawr (Incineroar) @ Rocky Helmet  
+Ability: Intimidate  
+Level: 50  
+Tera Type: Steel  
+EVs: 252 HP / 252 Atk / 4 Def  
+Brave Nature  
+IVs: 0 Spe  
+- Darkest Lariat  
+- Parting Shot  
+- Fake Out  
+- Flare Blitz  
+
+royalty (Kingambit) @ Life Orb  
+Ability: Supreme Overlord  
+Level: 50  
+Tera Type: Fairy  
+EVs: 252 HP / 252 Atk / 4 SpD  
+Brave Nature  
+IVs: 0 Spe  
+- Kowtow Cleave  
+- Swords Dance  
+- Iron Head  
+- Protect  
+
+sippy cup (Sinistcha) @ Focus Sash  
+Ability: Hospitality  
+Level: 50  
+Tera Type: Water  
+EVs: 252 HP / 4 Def / 252 SpA  
+Quiet Nature  
+IVs: 0 Atk / 0 Spe  
+- Trick Room  
+- Hex  
+- Matcha Gotcha  
+- Scald  
+
+wug (Araquanid) @ Assault Vest  
+Ability: Water Bubble  
+Level: 50  
+Tera Type: Water  
+EVs: 236 HP / 196 Atk / 76 SpD  
+Sassy Nature  
+IVs: 0 Spe  
+- Poison Jab  
+- Chilling Water  
+- X-Scissor  
+- Liquidation  
+
+wilfred (Ursaluna-Bloodmoon) @ Throat Spray  
+Ability: Mind's Eye  
+Level: 50  
+Tera Type: Fairy  
+EVs: 140 HP / 196 SpA / 172 SpD  
+Quiet Nature  
+IVs: 0 Atk / 0 Spe  
+- Earth Power  
+- Blood Moon  
+- Hyper Voice  
+- Moonblast  
+
