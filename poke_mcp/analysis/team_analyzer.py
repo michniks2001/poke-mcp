@@ -154,6 +154,7 @@ class TeamAnalyzer:
             raise ValueError("Team is empty; cannot analyze")
 
         contexts = self._build_context(team)
+        has_speed_control = self._team_has_speed_control(team)
         defense_report = self._evaluate_defensive_profile(contexts)
         offense_report = self._evaluate_offensive_coverage(contexts)
         defensive_threats = self._build_threat_assessments(
@@ -175,10 +176,8 @@ class TeamAnalyzer:
 
         summary_bits = [
             f"Detected {len(team.pokemon)} Pokémon",
-            f"Top weakness: {
-                defense_report['top_weakness']}" if defense_report["top_weakness"] else "Balanced type chart",
-            f"Speed control present" if any("Speed control" in (
-                ins.role or "") for ins in insights) else "No obvious speed control",
+            f"Top weakness: {defense_report['top_weakness']}" if defense_report["top_weakness"] else "Balanced type chart",
+            "Speed control present" if has_speed_control else "No obvious speed control",
         ]
         summary = ". ".join(summary_bits)
 
@@ -201,10 +200,7 @@ class TeamAnalyzer:
             types: List[str] = []
             meta: Optional[PokemonMeta] = None
             move_data: Dict[str, Dict[str, Any]] = {}
-            try:
-                types = self.pokeapi.get_pokemon_types(species)
-            except Exception:  # pragma: no cover - network failures
-                types = []
+            types = self._resolve_types(species)
             try:
                 meta = self.pikalytics.fetch_pokemon(self.format_slug, species)
             except Exception:  # pragma: no cover - network failures
@@ -232,6 +228,18 @@ class TeamAnalyzer:
                 )
             )
         return contexts
+
+    def _resolve_types(self, species: str) -> List[str]:
+        try:
+            return self.pokeapi.get_pokemon_types(species)
+        except Exception:  # pragma: no cover - fallback path
+            if "-" in species:
+                base = species.split("-", 1)[0]
+                try:
+                    return self.pokeapi.get_pokemon_types(base)
+                except Exception:
+                    return []
+            return []
 
     # ------------------------------------------------------------------
     # Defensive coverage
@@ -357,8 +365,7 @@ class TeamAnalyzer:
             if pressure < 0.4:
                 continue
             reasons = [
-                f"Threatens {len(targets)} teammate(s): {
-                    ', '.join(sorted(targets))}",
+                f"Threatens {len(targets)} teammate(s): {', '.join(sorted(targets))}",
                 f"Historical win rate ≈ {int(avg_rate * 100)}%",
             ]
             assessments.append(
@@ -475,32 +482,32 @@ class TeamAnalyzer:
             reasons: List[str] = []
             if weak_targets:
                 reasons.append(
-                    f"Coverage hits {len(weak_targets)} member(s): {
-                        ', '.join(sorted(weak_targets))}"
+                    f"Coverage hits {len(weak_targets)} member(s): {', '.join(sorted(weak_targets))}"
                 )
             if resist_targets:
                 reasons.append(
-                    f"Resists common offenses from {
-                        ', '.join(sorted(resist_targets))}"
+                    f"Resists common offenses from {', '.join(sorted(resist_targets))}"
                 )
             if speed_targets:
                 reasons.append(
                     f"Outspeeds {', '.join(sorted(speed_targets))}"
                 )
+
+            if not can_threaten and weak_targets:
+                reasons.append(
+                    f"Team lacks super-effective answers against {', '.join(entry_types)}"
+                )
+                pressure = round(min(0.99, pressure + 0.3), 2)
+            else:
+                pressure = min(0.99, pressure)
+
             assessments.append(
                 ThreatAssessment(
                     threat=threat_name,
-                    pressure=min(0.99, pressure),
+                    pressure=pressure,
                     reasons=reasons,
                 )
             )
-
-            if not can_threaten and weak_targets:
-                pressure += 0.3
-                reasons.append(
-                    f"Team lacks super-effective answers against {
-                        ', '.join(entry_types)}"
-                )
 
         return sorted(assessments, key=lambda a: a.pressure, reverse=True)[:5]
 
@@ -544,6 +551,7 @@ class TeamAnalyzer:
             if (
                 not has_ground_move
                 and (role in {"Primary attacker", "Setup sweeper"})
+                and self._is_physical_attacker(pokemon)
             ):
                 risks.append(
                     "No ground coverage (common in VGC for hitting Steels/Electrics)"
@@ -780,3 +788,16 @@ class TeamAnalyzer:
         offense_ev = max(pokemon.evs.get("atk", 0), pokemon.evs.get("spa", 0))
         hp_ev = pokemon.evs.get("hp", 0)
         return offense_ev >= 200 and hp_ev <= 200
+
+    @staticmethod
+    def _is_physical_attacker(pokemon) -> bool:
+        atk_ev = pokemon.evs.get("atk", 0)
+        spa_ev = pokemon.evs.get("spa", 0)
+        return atk_ev > spa_ev and atk_ev >= 100
+
+    def _team_has_speed_control(self, team: Team) -> bool:
+        for pokemon in team.pokemon:
+            for move in pokemon.moves:
+                if move.strip().lower() in SPEED_CONTROL_MOVES:
+                    return True
+        return False
