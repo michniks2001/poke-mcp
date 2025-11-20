@@ -43,20 +43,15 @@ class GeminiClient:
 
         parts = [
             {
-                "role": "system",
-                "parts": [
-                    "You are an expert Pokemon VGC analyst. Summarize the team assessment "
-                    "succinctly, highlighting key threats, coverage gaps, and adjustments."
-                ],
-            },
-            {
                 "role": "user",
                 "parts": [
+                    "You are an expert Pokemon VGC analyst. Summarize the team assessment "
+                    "succinctly, highlighting key threats, coverage gaps, and adjustments.",
                     f"Overall summary: {summary}",
                     f"Threats: {threats}",
                     f"Per-Pokemon insights: {insights}",
                     f"Recommendations: {recommendations}",
                 ],
-            },
+            }
         ]
         return parts

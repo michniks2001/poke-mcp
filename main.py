@@ -71,22 +71,22 @@ def _humanize_report(report: dict[str, object], vector_context: list | None = No
     if vectors:
         lines.append("Meta scouting:")
         for entry in vectors:
-            threat = entry.get("threat")
+            query_desc = entry.get("query") or "Similar meta Pokémon"
             matches = entry.get("matches") or []
-            if not matches:
-                continue
-            doc = matches[0].get("document")
-            if isinstance(doc, str):
-                try:
-                    info = json.loads(doc)
-                    summary = f"{info.get('name')} ({', '.join(info.get('types', []))})"
-                    if info.get("type_context"):
-                        summary += f" - {info['type_context']}"
-                except json.JSONDecodeError:
-                    summary = doc
-            else:
-                summary = str(doc)
-            lines.append(f"  - {threat}: {summary}")
+            for match in matches[:3]:
+                doc = match.get("document")
+                if isinstance(doc, str):
+                    try:
+                        info = json.loads(doc)
+                        summary = f"{info.get('name')} ({', '.join(info.get('types', []))})"
+                        if info.get("type_context"):
+                            summary += f" - {info['type_context']}"
+                    except json.JSONDecodeError:
+                        summary = doc
+                else:
+                    summary = str(doc)
+                lines.append(f"  - {summary}")
+            lines.append(f"    (matched against: {query_desc[:120]}...)" if query_desc else "")
 
     return "\n".join(lines).strip()
 

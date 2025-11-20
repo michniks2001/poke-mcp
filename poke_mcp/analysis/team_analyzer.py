@@ -39,6 +39,16 @@ SPEED_CONTROL_MOVES = {
     "bleakwind storm",
     "thunder wave",
     "electroweb",
+    "trick-room",
+}
+
+SUPPORT_AILMENTS = {
+    "burn",
+    "paralysis",
+    "poison",
+    "sleep",
+    "confusion",
+    "freeze",
 }
 
 SUPPORT_MOVES = {
@@ -50,6 +60,63 @@ SUPPORT_MOVES = {
     "snarl",
     "parting shot",
     "fake out",
+}
+
+SETUP_MOVES = {
+    "swords dance",
+    "nasty plot",
+    "shell smash",
+    "calm mind",
+    "dragon dance",
+    "quiver dance",
+    "bulk up",
+    "shift gear",
+    "coil",
+    "work up",
+    "tail glow",
+    "agility",
+    "rock polish",
+    "curse",
+}
+
+RELEVANT_OFFENSIVE_TYPES = {
+    "fire",
+    "water",
+    "electric",
+    "ice",
+    "ground",
+    "fighting",
+    "fairy",
+    "dragon",
+    "ghost",
+    "dark",
+}
+
+COMMON_COVERAGE_TYPES = list(RELEVANT_OFFENSIVE_TYPES) + ["steel", "grass"]
+
+TYPE_COVERAGE_HINTS: Dict[str, str] = {
+    "normal": "Add Fighting coverage",
+    "steel": "Bring Ground or Fire coverage",
+    "rock": "Lean on Water or Grass coverage",
+    "fire": "Lean on Water coverage",
+    "water": "Bring Electric or Grass coverage",
+    "electric": "Add Ground coverage",
+    "flying": "Rock or Electric coverage",
+    "ground": "Water or Grass coverage",
+    "fairy": "Steel or Poison coverage",
+}
+
+RESIST_SUGGESTIONS: Dict[str, str] = {
+    "fire": "Add a Water-, Rock-, or Dragon-type pivot to soak Fire hits.",
+    "water": "Consider a Grass- or Water-resistant core to handle Water attackers.",
+    "electric": "Ground-types or Lightning Rod users help patch the Electric gap.",
+    "ice": "Bulky Water or Steel-types can sponge Ice attacks.",
+    "ground": "Levitate users or Flying-types relieve Ground pressure.",
+    "fighting": "Fairy- or Psychic-types deter Fighting spam.",
+    "fairy": "Steel- or Poison-types provide reliable Fairy counterplay.",
+    "dragon": "Fairy-types or Ice coverage answer Dragon threats.",
+    "ghost": "Dark-types or Normal immunities cover Ghost hits.",
+    "dark": "Fairy- or Fighting-types mitigate Dark pressure.",
 }
 
 
@@ -88,6 +155,7 @@ class TeamAnalyzer:
 
         contexts = self._build_context(team)
         defense_report = self._evaluate_defensive_profile(contexts)
+        offense_report = self._evaluate_offensive_coverage(contexts)
         defensive_threats = self._build_threat_assessments(
             defense_report["weak_counts"], len(team.pokemon)
         )
@@ -107,8 +175,10 @@ class TeamAnalyzer:
 
         summary_bits = [
             f"Detected {len(team.pokemon)} Pokémon",
-            f"Top weakness: {defense_report['top_weakness']}" if defense_report["top_weakness"] else "Balanced type chart",
-            f"Speed control present" if any("Speed control" in (ins.role or "") for ins in insights) else "No obvious speed control",
+            f"Top weakness: {
+                defense_report['top_weakness']}" if defense_report["top_weakness"] else "Balanced type chart",
+            f"Speed control present" if any("Speed control" in (
+                ins.role or "") for ins in insights) else "No obvious speed control",
         ]
         summary = ". ".join(summary_bits)
 
@@ -169,7 +239,7 @@ class TeamAnalyzer:
     def _evaluate_defensive_profile(self, contexts: List[PokemonContext]) -> Dict[str, any]:
         weak_counts: Dict[str, int] = {}
         resist_counts: Dict[str, int] = {}
-        gap_messages: List[str] = []
+        gap_details: List[tuple[int, str]] = []
         recommendations: List[str] = []
         for attack_type in TYPE_ORDER:
             weak = 0
@@ -182,17 +252,22 @@ class TeamAnalyzer:
                     resist += 1
             weak_counts[attack_type] = weak
             resist_counts[attack_type] = resist
-            if weak >= 3:
-                gap_messages.append(
-                    f"{attack_type.title()} offense pressures {weak} team members."
-                )
-                recommendations.append(
-                    f"Consider a {attack_type.title()} resist or immunity to ease this load."
-                )
-            if resist == 0:
-                gap_messages.append(
-                    f"No reliable resist for {attack_type.title()} attacks detected."
-                )
+            if attack_type in RELEVANT_OFFENSIVE_TYPES:
+                if weak >= 3:
+                    gap_details.append(
+                        (weak, f"{attack_type.title()} offense pressures {weak} team members.")
+                    )
+                if resist == 0:
+                    severity = max(1, weak)
+                    gap_details.append(
+                        (severity, f"No reliable resist for {attack_type.title()} attacks detected.")
+                    )
+                    suggestion = RESIST_SUGGESTIONS.get(attack_type)
+                    if suggestion:
+                        recommendations.append(suggestion)
+        gap_messages = [
+            msg for _, msg in sorted(gap_details, key=lambda item: item[0], reverse=True)[:3]
+        ]
         top_weakness = max(weak_counts.items(), key=lambda kv: kv[1])[0] if weak_counts else None
         return {
             "weak_counts": weak_counts,
@@ -272,7 +347,8 @@ class TeamAnalyzer:
         assessments: List[ThreatAssessment] = []
         for threat_name, data in aggregated.items():
             targets: Set[str] = data["targets"]  # type: ignore[assignment]
-            win_rates: List[float] = data["win_rates"]  # type: ignore[assignment]
+            # type: ignore[assignment]
+            win_rates: List[float] = data["win_rates"]
             if not targets:
                 continue
             avg_rate = sum(win_rates) / len(win_rates)
@@ -281,7 +357,8 @@ class TeamAnalyzer:
             if pressure < 0.4:
                 continue
             reasons = [
-                f"Threatens {len(targets)} teammate(s): {', '.join(sorted(targets))}",
+                f"Threatens {len(targets)} teammate(s): {
+                    ', '.join(sorted(targets))}",
                 f"Historical win rate ≈ {int(avg_rate * 100)}%",
             ]
             assessments.append(
@@ -297,7 +374,8 @@ class TeamAnalyzer:
     def _evaluate_ladder_threats(
         self, team: Team, contexts: List[PokemonContext]
     ) -> List[ThreatAssessment]:
-        ladder_entries = self.pikalytics.iter_ladder_entries(self.ladder_threat_limit)
+        ladder_entries = self.pikalytics.iter_ladder_entries(
+            self.ladder_threat_limit)
         if not ladder_entries:
             return []
 
@@ -310,7 +388,8 @@ class TeamAnalyzer:
             threat_name = str(entry.get("name") or "").strip()
             if not threat_name:
                 continue
-            entry_types = [t.lower() for t in entry.get("types", []) if isinstance(t, str)]
+            entry_types = [t.lower() for t in entry.get(
+                "types", []) if isinstance(t, str)]
             move_types = {
                 (m.get("type") or "").lower()
                 for m in entry.get("moves", [])
@@ -323,6 +402,28 @@ class TeamAnalyzer:
             resist_targets: List[str] = []
             speed_targets: List[str] = []
             threat_speed = self._entry_speed(entry)
+            can_threaten: List[str] = []
+
+            for pokemon in team.pokemon:
+                ctx = ctx_by_name.get(pokemon.name)
+                if not ctx:
+                    continue
+
+                for move_slug, move_data in ctx.move_data.items():
+                    move_type = move_data.get("type")
+                    base_power = move_data.get("base_power")
+
+                    if (
+                        not move_type
+                        or not isinstance(base_power, (int, float))
+                        or base_power <= 0
+                    ):
+                        continue
+
+                    mult = damage_multiplier(move_type, entry_types)
+                    if mult >= 2.0:
+                        can_threaten.append(pokemon.name)
+                        break
 
             for pokemon in team.pokemon:
                 ctx = ctx_by_name.get(pokemon.name)
@@ -335,9 +436,12 @@ class TeamAnalyzer:
                     weak_targets.append(pokemon.name)
 
                 # resistance/immunity check
-                coverage_types = [
-                    c.lower() for c in (ctx.meta.offensive_coverage if ctx.meta else [])
-                ]
+                coverage_types = {
+                    (md.get("type") or "").lower()
+                    for md in ctx.move_data.values()
+                    if isinstance(md.get("base_power"), (int, float))
+                    and md.get("base_power") >= 50
+                }
                 if coverage_types and all(
                     damage_multiplier(cov, entry_types) <= 1.0 for cov in coverage_types
                 ):
@@ -371,11 +475,13 @@ class TeamAnalyzer:
             reasons: List[str] = []
             if weak_targets:
                 reasons.append(
-                    f"Coverage hits {len(weak_targets)} member(s): {', '.join(sorted(weak_targets))}"
+                    f"Coverage hits {len(weak_targets)} member(s): {
+                        ', '.join(sorted(weak_targets))}"
                 )
             if resist_targets:
                 reasons.append(
-                    f"Resists common offenses from {', '.join(sorted(resist_targets))}"
+                    f"Resists common offenses from {
+                        ', '.join(sorted(resist_targets))}"
                 )
             if speed_targets:
                 reasons.append(
@@ -388,6 +494,13 @@ class TeamAnalyzer:
                     reasons=reasons,
                 )
             )
+
+            if not can_threaten and weak_targets:
+                pressure += 0.3
+                reasons.append(
+                    f"Team lacks super-effective answers against {
+                        ', '.join(entry_types)}"
+                )
 
         return sorted(assessments, key=lambda a: a.pressure, reverse=True)[:5]
 
@@ -403,12 +516,37 @@ class TeamAnalyzer:
             risks: List[str] = []
             if ctx and ctx.meta and ctx.meta.usage_percent:
                 strengths.append(
-                    f"Seen in {ctx.meta.usage_percent:.1f}% of {self.format_slug} teams"
+                    f"Seen in {ctx.meta.usage_percent:.1f}% of {
+                        self.format_slug} teams"
                 )
-            if ctx and ctx.meta and ctx.meta.offensive_coverage:
-                strengths.append(
-                    "Offensive coverage: "
-                    + ", ".join(ctx.meta.offensive_coverage)
+            has_ground_move = False
+            if ctx and ctx.move_data:
+                actual_coverage = set()
+                for move_slug, move_data in ctx.move_data.items():
+                    move_type = (move_data.get("type") or "").lower()
+                    base_power = move_data.get("base_power")
+                    damage_class = (move_data.get("damage_class") or "").lower()
+                    if (
+                        move_type
+                        and isinstance(base_power, (int, float))
+                        and base_power >= 50
+                        and damage_class != "status"
+                    ):
+                        actual_coverage.add(move_type.title())
+                        if move_type == "ground":
+                            has_ground_move = True
+
+                if actual_coverage:
+                    strengths.append(
+                        f"This set provides {', '.join(sorted(actual_coverage))} coverage"
+                    )
+
+            if (
+                not has_ground_move
+                and (role in {"Primary attacker", "Setup sweeper"})
+            ):
+                risks.append(
+                    "No ground coverage (common in VGC for hitting Steels/Electrics)"
                 )
             if (
                 pokemon.tera_type
@@ -416,7 +554,8 @@ class TeamAnalyzer:
                 and ctx.types
                 and pokemon.tera_type.lower() not in ctx.types
             ):
-                strengths.append(f"Tera {pokemon.tera_type} offers matchup flexibility")
+                strengths.append(
+                    f"Tera {pokemon.tera_type} offers matchup flexibility")
             if role is None:
                 risks.append("Role unclear from listed moves")
             insights.append(
@@ -434,8 +573,10 @@ class TeamAnalyzer:
         types = {t.lower() for t in (context.types if context else [])}
         has_speed_control = False
         has_support = False
-        has_attacker = False
         has_setup = False
+        stab_powerful = 0
+        has_high_power_stab = False
+        offensive_move_seen = False
 
         for move in pokemon.moves:
             slug = move.strip().lower()
@@ -444,49 +585,59 @@ class TeamAnalyzer:
             data = move_data.get(slug)
             if not data:
                 continue
-            priority = data.get("priority") or 0
-            if priority > 0:
-                has_speed_control = True
+            move_type = (data.get("type") or "").lower()
+            damage_class = (data.get("damage_class") or "").lower()
+            base_power = data.get("base_power")
             stat_changes = data.get("stat_changes") or []
-            for change in stat_changes:
-                stat_name = (change.get("stat") or "").lower()
-                delta = change.get("change") or 0
-                if stat_name == "speed" and delta != 0:
-                    has_speed_control = True
-                if stat_name in {"attack", "special-attack"} and delta > 0:
-                    has_setup = True
             meta = data.get("meta") or {}
             ailment = (meta.get("ailment") or "").lower()
-            if ailment in {"paralysis"}:
+
+            if slug in SPEED_CONTROL_MOVES:
                 has_speed_control = True
-            if data.get("damage_class") == "status":
-                positive_boost = any(
-                    (change.get("stat") or "").lower() in {"attack", "special-attack", "speed"}
-                    and (change.get("change") or 0) > 0
-                    for change in stat_changes
-                )
-                if not positive_boost:
-                    has_support = True
-                else:
+
+            boosts_offense = slug in SETUP_MOVES or any(
+                (change.get("stat") or "").lower() in {"attack", "special-attack", "speed"}
+                and (change.get("change") or 0) > 0
+                for change in stat_changes
+            )
+
+            if damage_class == "status":
+                if boosts_offense:
                     has_setup = True
-            if ailment in {"burn", "paralysis", "poison", "sleep", "confusion"}:
+                else:
+                    if slug in SUPPORT_MOVES or ailment in SUPPORT_AILMENTS:
+                        has_support = True
+                continue
+
+            if ailment == "paralysis":
+                has_speed_control = True
+            if slug in SUPPORT_MOVES or ailment in SUPPORT_AILMENTS:
                 has_support = True
-            base_power = data.get("base_power")
-            move_type = (data.get("type") or "").lower()
-            if (
-                types
-                and move_type in types
-                and isinstance(base_power, (int, float))
-                and base_power >= 75
-            ):
-                has_attacker = True
+
+            if not isinstance(base_power, (int, float)) or base_power <= 0:
+                continue
+
+            offensive_move_seen = True
+            if types and move_type in types:
+                if base_power >= 100:
+                    has_high_power_stab = True
+                if base_power >= 75:
+                    stab_powerful += 1
+
+        is_primary_attacker = offensive_move_seen and (
+            has_high_power_stab
+            or stab_powerful >= 2
+            or self._ev_indicates_attacker(pokemon)
+        )
 
         if has_speed_control:
             return "Speed control"
-        if has_attacker or has_setup:
-            return "Primary attacker"
+        if has_setup:
+            return "Setup sweeper"
         if has_support:
             return "Utility support"
+        if is_primary_attacker:
+            return "Primary attacker"
         return None
 
     @staticmethod
@@ -528,7 +679,9 @@ class TeamAnalyzer:
         offensive_threats: List[ThreatAssessment],
         contexts: List[PokemonContext],
     ) -> List[str]:
-        recommendations: List[str] = list(defense_report.get("recommendations", []))
+        recommendations: List[str] = list(
+            defense_report.get("recommendations", []))
+        context_map = {ctx.pokemon: ctx for ctx in contexts}
         if offensive_threats:
             top = offensive_threats[0]
             recommendations.append(
@@ -536,11 +689,94 @@ class TeamAnalyzer:
             )
 
         has_primary_attacker = any(
-            self._infer_role(pokemon) == "Primary attacker" for pokemon in team.pokemon
+            (
+                self._infer_role(pokemon, context_map.get(pokemon.name))
+                in {"Primary attacker", "Setup sweeper"}
+            )
+            or self._ev_indicates_attacker(pokemon)
+            for pokemon in team.pokemon
         )
         if not has_primary_attacker:
             recommendations.append(
                 "Team lacks a defined primary attacker; consider adding a sweeper."
             )
 
-        return list(dict.fromkeys(recommendations))
+        offense_report = self._evaluate_offensive_coverage(contexts)
+
+        if offense_report["gaps"]:
+            prioritized = [
+                t for t in offense_report["gaps"]
+                if t in COMMON_COVERAGE_TYPES
+            ] or offense_report["gaps"]
+            selected = prioritized[:3]
+            gap_descriptions = [
+                f"{t.title()} ({TYPE_COVERAGE_HINTS.get(t, 'Add coverage')})"
+                for t in selected
+            ]
+            if gap_descriptions:
+                if len(gap_descriptions) == 1:
+                    gap_msg = gap_descriptions[0]
+                else:
+                    gap_msg = ", ".join(gap_descriptions[:-1]) + f" and {gap_descriptions[-1]}"
+                recommendations.append(
+                    f"Team struggles to hit {gap_msg} super-effectively. Adjust coverage accordingly."
+                )
+
+        if offense_report["weak_coverage"]:
+            prioritized = [
+                t for t in offense_report["weak_coverage"]
+                if t in COMMON_COVERAGE_TYPES
+            ] or offense_report["weak_coverage"]
+            selected = prioritized[:2]
+            weak_msg = " and ".join(t.title() for t in selected)
+            recommendations.append(
+                f"Only one team member covers {weak_msg}. Add redundancy before tournaments."
+            )
+
+        return list(dict.fromkeys(recommendations))[:5]
+
+    def _evaluate_offensive_coverage(self, contexts: List[PokemonContext]) -> Dict[str, Any]:
+        """Analyze what types the team can effectively hit."""
+
+        coverage_by_type: Dict[str, List[str]] = {t: [] for t in TYPE_ORDER}
+        for ctx in contexts:
+            for move_slug, move_data in ctx.move_data.items():
+                move_type = move_data.get("type")
+                base_power = move_data.get("base_power")
+                damage_class = (move_data.get("damage_class") or "").lower()
+
+                if (
+                    not move_type
+                    or damage_class == "status"
+                    or not isinstance(base_power, (int, float))
+                    or base_power < 50
+                ):
+                    continue
+
+                for defender_type in TYPE_ORDER:
+                    mult = damage_multiplier(move_type, [defender_type])
+
+                    if mult > 1.0:
+                        move_name = move_data.get("name") or move_slug
+                        coverage_by_type[defender_type].append(
+                            f"{ctx.pokemon} ({move_name})"
+                        )
+
+        gaps = [t for t, users in coverage_by_type.items() if not users]
+
+        weak_coverage = [
+            t for t, users in coverage_by_type.items()
+            if len(users) == 1
+        ]
+
+        return {
+            "coverage_by_type": coverage_by_type,
+            "gaps": gaps,
+            "weak_coverage": weak_coverage,
+        }
+
+    @staticmethod
+    def _ev_indicates_attacker(pokemon) -> bool:
+        offense_ev = max(pokemon.evs.get("atk", 0), pokemon.evs.get("spa", 0))
+        hp_ev = pokemon.evs.get("hp", 0)
+        return offense_ev >= 200 and hp_ev <= 200

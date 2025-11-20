@@ -1,0 +1,105 @@
+=== team1.txt run (python main.py team1.txt --debug) ===
+[debug] Arguments parsed: Namespace(team_file='team1.txt', format='gen9vgc2025regh', team_name=None, json=False, debug=True)
+[debug] Loaded team text (1145 chars)
+[debug] Parsed team with 6 Pokémon
+[debug] LLM client available: True
+[debug] Vector store available: True
+[debug] Initialized analyzer for gen9vgc2025regh
+[debug] Running analysis pipeline
+[debug] Syncing 628 ladder entries into vector store
+[debug] Vector query: Hatterene [psychic/fairy] role=Primary attacker moves=Trick Room, Reflect, Dazzling Gleam, Heal Pulse | Amoonguss [grass...
+[debug] Invoking Gemini summarize_team
+[debug] Gemini returned summary
+[debug] Pipeline finished
+Detected 6 Pokémon. Top weakness: ice. Speed control present
+Threats:
+  - Gholdengo (pressure 0.83) :: Coverage hits 5 member(s): Amoonguss, Armarouge, Dragonite, Granbull, Hatterene
+  - Incineroar (pressure 0.64) :: Threatens 2 teammate(s): Armarouge, Hatterene, Historical win rate ≈ 64%
+  - Chi-Yu (pressure 0.62) :: Threatens 1 teammate(s): Hatterene, Historical win rate ≈ 62%
+  - Armarouge (pressure 0.6) :: Threatens 1 teammate(s): Amoonguss, Historical win rate ≈ 60%
+  - Landorus-Therian (pressure 0.59) :: Threatens 2 teammate(s): Armarouge, Dragonite, Historical win rate ≈ 59%
+Coverage gaps:
+  - No reliable resist for Normal attacks detected.
+  - No reliable resist for Poison attacks detected.
+  - No reliable resist for Flying attacks detected.
+  - No reliable resist for Rock attacks detected.
+  - No reliable resist for Ghost attacks detected.
+  - No reliable resist for Dragon attacks detected.
+  - No reliable resist for Dark attacks detected.
+Recommendations:
+  - Prep answers for Incineroar which pressures multiple teammates.
+  - Team lacks a defined primary attacker; consider adding a sweeper.
+  - Team cannot hit normal, fire, water types super-effectively. Consider adding coverage moves.
+  - Only one team member covers ice, ground types. If that Pokemon faints, you lose that coverage.
+Per-Pokémon insights:
+  - Hatterene: Primary attacker; strengths: Seen in 2.0% of gen9vgc2025regh teams, This set provdes Fairy coverage; risks: No ground coverage (common in VGC for hitting Steels/Electrics)
+  - Amoonguss: Speed control; strengths: Seen in 14.0% of gen9vgc2025regh teams, This set provdes Dark, Poison coverage, Tera Steel offers matchup flexibility; risks: No major risks
+  - Armarouge: Speed control; strengths: Seen in 2.0% of gen9vgc2025regh teams, This set provdes Fire, Psychic coverage; risks: No major risks
+  - Tornadus: Utility support; strengths: This set provdes Flying, Poison coverage; risks: No major risks
+  - Dragonite: Speed control; strengths: Seen in 36.0% of gen9vgc2025regh teams, This set provdes Dragon, Ice, Normal coverage, Tera Normal offers matchup flexibility; risks: No major risks
+  - Granbull: Primary attacker; strengths: This set provdes Dark, Fairy, Psychic coverage; risks: No ground coverage (common in VGC for hitting Steels/Electrics)
+Meta scouting:
+  - None: Metagross (steel, psychic) - Resists dragon, fairy, flying, grass, ice, normal, psychic, rock, steel; Weak to dark, fire, ghost, ground; Immune to poison
+Gemini Summary:
+This team employs good speed control but is highly vulnerable to **Ice-type attacks**. **Gholdengo** poses the most immediate threat, impacting five team members, while **Incineroar** applies significant pressure, particularly to Armarouge and Hatterene.
+Offensively, the team struggles to super-effectively hit **Normal, Fire, and Water** types and lacks consistent **Ground** coverage, exposing Hatterene and Granbull. Despite these Pokémon being designated primary attackers, the overall offensive identity is somewhat undefined, suggesting a need for a more dominant sweeper.
+Key adjustments include **preparing robust answers for Incineroar**, bolstering offensive coverage for Normal/Fire/Water types, and securing more reliable defensive checks against Ice and Ground threats to prevent single points of failure.
+
+=== team2.txt run (python main.py team2.txt --debug) ===
+[debug] Arguments parsed: Namespace(team_file='team2.txt', format='gen9vgc2025regh', team_name=None, json=False, debug=True)
+[debug] Loaded team text (1108 chars)
+[debug] Parsed team with 6 Pokémon
+[debug] LLM client available: True
+[debug] Vector store available: True
+[debug] Initialized analyzer for gen9vgc2025regh
+[debug] Running analysis pipeline
+[debug] Syncing 628 ladder entries into vector store
+[debug] Vector query: Torkoal [fire] role=Speed control moves=Eruption, Protect, Heat Wave, Will-O-Wisp | Hawlucha [fighting/flying] role=Speed control moves=High Jump Kick, Acrobatics, Swords Dance, Tailwind | Ogerpon-Cornerstone (F) [grass] role=Speed control moves=Spiky Shield, Horn Leech, Ivy Cudgel, Power Whip | Grimmsnarl [dark/fairy] role=Speed control moves=Spirit Break, Thunder Wave, Foul Play, Parting Shot | Walking Wake [water/dragon] role=Speed control moves=Snarl, Hydro Steam, Draco Meteor, Protect | Polteageist [ghost] role=Speed control moves=Stored Power, Strength Sap, Shell Smash, Protect
+[debug] Invoking Gemini summarize_team
+[debug] Gemini returned summary
+[debug] Pipeline finished
+Detected 6 Pokémon. Top weakness: fairy. Speed control present
+Threats:
+  - Chi-Yu (pressure 0.7) :: Threatens 1 teammate(s): Torkoal, Historical win rate ≈ 70%
+  - Gholdengo (pressure 0.67) :: Coverage hits 4 member(s): Grimmsnarl, Hawlucha, Polteageist, Torkoal
+  - Kingambit (pressure 0.66) :: Threatens 1 teammate(s): Polteageist, Historical win rate ≈ 66%
+  - Landorus-Therian (pressure 0.62) :: Threatens 1 teammate(s): Torkoal, Historical win rate ≈ 62%
+  - Amoonguss (pressure 0.57) :: Threatens 2 teammate(s): Grimmsnarl, Hawlucha, Historical win rate ≈ 57%
+Coverage gaps:
+  - No reliable resist for Electric attacks detected.
+  - No reliable resist for Flying attacks detected.
+  - No reliable resist for Rock attacks detected.
+  - No reliable resist for Dragon attacks detected.
+  - Fairy offense pressures 3 team members.
+Recommendations:
+  - Consider a Fairy resist or immunity to ease this load.
+  - Prep answers for Chi-Yu which pressures multiple teammates.
+  - Team lacks a defined primary attacker; consider adding a sweeper.
+  - Team cannot hit flying, fairy types super-effectively. Consider adding coverage moves.
+  - Only one team member covers normal, electric types. If that Pokemon faints, you lose that coverage.
+Per-Pokémon insights:
+  - Torkoal: Speed control; strengths: Seen in 5.0% of gen9vgc2025regh teams, This set provdes Fire coverage, Tera Fairy offers matchup flexibility; risks: No major risks
+  - Hawlucha: Speed control; strengths: This set provdes Fighting, Flying coverage; risks: No major risks
+  - Ogerpon-Cornerstone (F): Speed control; strengths: This set provdes Grass, Ground coverage; risks: No major risks
+  - Grimmsnarl: Speed control; strengths: Seen in 4.0% of gen9vgc2025regh teams, This set provdes Fairy coverage; risks: No major risks
+  - Walking Wake: Speed control; strengths: This set provdes Dragon, Normal, Water coverage; risks: No major risks
+  - Polteageist: Speed control; strengths: This set provdes Ghost, Grass coverage, Tera Grass offers matchup flexibility; risks: No major risks
+Meta scouting:
+  - None: Gholdengo (steel, ghost) - Resists bug, dragon, fairy, flying, grass, ice, psychic, rock, steel; Weak to dark, fire, ghost, ground; Immune to fighting, normal, poison
+Gemini Summary:
+This team is heavily centered on **speed control**, with all six Pokémon identified in that role. However, this creates significant vulnerabilities:
+**Key Threats:**
+*   **Chi-Yu (Top Threat):** Pressures Torkoal and boasts a high historical win rate.
+*   **Gholdengo & Kingambit:** Pose significant threats, hitting multiple team members (Gholdengo) or Polteageist hard (Kingambit).
+*   **Landorus-Therian & Amoonguss:** Also present challenges, particularly for Torkoal (Lando-T) and Grimmsnarl/Hawlucha (Amoonguss).
+**Coverage Gaps & Weaknesses:**
+*   **Top Weakness: Fairy.** The team lacks dedicated Fairy resists or immunities, making it highly susceptible to this common offensive type.
+*   **Missing Offensive Coverage:** Critically, the team **cannot hit Flying or Fairy types super-effectively**. This is a major defensive and offensive flaw.
+*   **Fragile Coverage:** Only one team member covers Normal and Electric types, creating a single point of failure.
+**Strategic Gaps & Adjustments:**
+*   **Lack of Primary Attacker:** Despite its speed control focus, the team **lacks a defined primary sweeper or offensive threat**. This makes closing games difficult.
+*   **Adjustments:**
+    *   **Add a Fairy resist/immunity** to mitigate the top weakness.
+    *   **Incorporate answers for Chi-Yu**.
+    *   **Introduce a dedicated primary attacker** to capitalize on speed control.
+    *   **Diversify offensive coverage** to hit Flying, Fairy, and bolster Normal/Electric.
