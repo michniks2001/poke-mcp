@@ -424,10 +424,13 @@ class TeamAnalyzer:
                 continue
             entry_types = [t.lower() for t in entry.get(
                 "types", []) if isinstance(t, str)]
+            entry_moves = [
+                m for m in entry.get("moves", []) if isinstance(m, dict)
+            ]
             move_types = {
                 (m.get("type") or "").lower()
-                for m in entry.get("moves", [])
-                if isinstance(m, dict) and m.get("type")
+                for m in entry_moves
+                if m.get("type")
             }
             if not entry_types or not move_types:
                 continue
@@ -463,11 +466,20 @@ class TeamAnalyzer:
                 ctx = ctx_by_name.get(pokemon.name)
                 if not ctx:
                     continue
-                # coverage check
-                if ctx.types and any(
-                    damage_multiplier(move_type, ctx.types) > 1.5 for move_type in move_types
-                ):
-                    weak_targets.append(pokemon.name)
+                if ctx.types:
+                    stab_types = set(entry_types)
+                    is_threat = False
+                    for move in entry_moves:
+                        move_type = (move.get("type") or "").lower()
+                        if not move_type:
+                            continue
+                        multiplier = damage_multiplier(move_type, ctx.types)
+                        is_stab = move_type in stab_types
+                        if (is_stab and multiplier > 1.5) or multiplier >= 4.0:
+                            is_threat = True
+                            break
+                    if is_threat:
+                        weak_targets.append(pokemon.name)
 
                 # resistance/immunity check
                 coverage_types = {
