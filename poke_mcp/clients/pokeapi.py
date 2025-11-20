@@ -101,6 +101,11 @@ class PokeAPIClient:
         self._move_data_cache[slug] = data
         return data
 
+    def get_pokemon_species(self, name: str) -> Dict[str, Any]:
+        slug = self._slugify_name(name)
+        endpoint = f"pokemon-species/{slug}"
+        return self._get_json(endpoint)
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
