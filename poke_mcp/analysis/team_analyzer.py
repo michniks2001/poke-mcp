@@ -9,6 +9,8 @@ from ..clients import PikalyticsClient, PokeAPIClient
 from ..clients.pikalytics import PokemonMeta
 from ..data.type_chart import damage_multiplier
 from ..models import PokemonInsight, Team, TeamReport, ThreatAssessment
+from .damage_calc import DamageCalculator
+from .speed_tier import SpeedTierEngine
 
 
 TYPE_ORDER = [
@@ -144,6 +146,8 @@ class TeamAnalyzer:
         self.format_slug = format_slug
         self.ladder_threat_limit = ladder_threat_limit
         self.move_cache: Dict[str, Dict[str, Any]] = {}
+        self.damage_calc = DamageCalculator()
+        self.speed_tier_engine = SpeedTierEngine(pokeapi_client=self.pokeapi)
 
     def analyze(self, team: Team) -> TeamReport:
         report, _ = self.analyze_with_context(team)
@@ -155,8 +159,12 @@ class TeamAnalyzer:
 
         contexts = self._build_context(team)
         has_speed_control = self._team_has_speed_control(team)
-        defense_report = self._evaluate_defensive_profile(contexts)
-        offense_report = self._evaluate_offensive_coverage(contexts)
+        
+        # Calculate speed tiers for the team
+        speed_tiers = self._calculate_team_speed_tiers(team, contexts)
+        
+        defense_report = self._evaluate_defensive_profile(team, contexts)
+        offense_report = self._evaluate_offensive_coverage(team, contexts)
         defensive_threats = self._build_threat_assessments(
             defense_report["weak_counts"], len(team.pokemon)
         )
@@ -169,10 +177,21 @@ class TeamAnalyzer:
             key=lambda threat: threat.pressure,
             reverse=True,
         )[:5]
-        insights = self._build_pokemon_insights(team, contexts)
+        # Build insights with speed tier information
+        insights = self._build_pokemon_insights(team, contexts, speed_tiers)
+        
+        # Analyze speed control redundancy
+        speed_control_analysis = self._analyze_speed_control_redundancy(team, contexts)
+        
         recommendations = self._build_recommendations(
-            team, defense_report, offensive_threats, contexts
+            team, defense_report, offensive_threats, contexts, speed_control_analysis
         )
+
+        # Detect team strategies (import here to avoid circular dependency)
+        from .strategy_detector import StrategyDetector
+
+        strategy_detector = StrategyDetector()
+        strategies = strategy_detector.detect_strategies(team, contexts)
 
         ranked_weaknesses: List[str] = defense_report.get("ranked_types", [])[:3]
         summary_bits = [
@@ -180,8 +199,24 @@ class TeamAnalyzer:
             f"Top weakness: {defense_report['top_weakness']}" if defense_report["top_weakness"] else "Balanced type chart",
             "Speed control present" if has_speed_control else "No obvious speed control",
         ]
+        if strategies:
+            primary_strategy = strategies[0]
+            summary_bits.append(f"Primary strategy: {primary_strategy.name}")
         summary = ". ".join(summary_bits)
 
+        # Convert speed tiers to dict format for report
+        speed_tiers_dict = {
+            tier.pokemon_name: {
+                "base_speed": tier.base_speed,
+                "raw_speed": tier.raw_speed,
+                "tailwind_speed": tier.tailwind_speed,
+                "booster_speed": tier.booster_speed,
+                "priority_moves": tier.priority_moves,
+                "minus_priority_moves": tier.minus_priority_moves,
+            }
+            for tier in speed_tiers.values()
+        }
+        
         report = TeamReport(
             summary=summary,
             threats=combined_threats,
@@ -189,8 +224,41 @@ class TeamAnalyzer:
             coverage_gaps=defense_report["gap_messages"],
             recommendations=recommendations,
             top_weaknesses=ranked_weaknesses,
+            strategies=strategies,
+            speed_tiers=speed_tiers_dict,
         )
         return report, contexts
+
+    # ------------------------------------------------------------------
+    # Speed tier calculation
+    # ------------------------------------------------------------------
+    def _calculate_team_speed_tiers(
+        self, team: Team, contexts: List[PokemonContext]
+    ) -> Dict[str, Any]:
+        """Calculate speed tiers for all team members."""
+        speed_tiers = {}
+        context_map = {ctx.pokemon: ctx for ctx in contexts}
+        
+        for pokemon in team.pokemon:
+            # Get base stats if available
+            base_stats = None
+            ctx = context_map.get(pokemon.name)
+            if ctx and ctx.meta:
+                # Try to get base stats from Pikalytics data or PokeAPI
+                try:
+                    poke_data = self.pokeapi.get_pokemon(pokemon.species or pokemon.name)
+                    stats = poke_data.get("stats", [])
+                    base_stats = {
+                        stat.get("stat", {}).get("name"): stat.get("base_stat")
+                        for stat in stats
+                    }
+                except Exception:
+                    pass
+            
+            tier = self.speed_tier_engine.calculate_speed_tier(pokemon, base_stats)
+            speed_tiers[pokemon.name] = tier
+        
+        return speed_tiers
 
     # ------------------------------------------------------------------
     # Context building
@@ -264,33 +332,71 @@ class TeamAnalyzer:
     # ------------------------------------------------------------------
     # Defensive coverage
     # ------------------------------------------------------------------
-    def _evaluate_defensive_profile(self, contexts: List[PokemonContext]) -> Dict[str, any]:
+    def _get_effective_types(self, pokemon, context: PokemonContext) -> List[str]:
+        """Get effective types considering Tera type (replaces base types if different)."""
+        base_types = [t.lower() for t in context.types]
+        if pokemon.tera_type:
+            tera_type = pokemon.tera_type.lower()
+            # If Tera type is different from base types, it replaces them
+            if tera_type not in base_types:
+                return [tera_type]
+        return base_types
+
+    def _evaluate_defensive_profile(self, team: Team, contexts: List[PokemonContext]) -> Dict[str, any]:
         weak_counts: Dict[str, int] = {}
         resist_counts: Dict[str, int] = {}
         gap_details: List[tuple[int, str]] = []
         recommendations: List[str] = []
         ranked_pairs: List[tuple[str, int]] = []
+        team_map = {p.name: p for p in team.pokemon}
+        
         for attack_type in TYPE_ORDER:
             weak = 0
             resist = 0
+            weak_with_tera = 0  # Count weak only considering base types
             for ctx in contexts:
-                multiplier = self._type_multiplier(ctx.types, attack_type)
-                if multiplier > 1.5:
+                pokemon = team_map.get(ctx.pokemon)
+                if not pokemon:
+                    continue
+                
+                # Check base types
+                base_multiplier = self._type_multiplier(ctx.types, attack_type)
+                
+                # Check effective types (with Tera)
+                effective_types = self._get_effective_types(pokemon, ctx)
+                tera_multiplier = self._type_multiplier(effective_types, attack_type)
+                
+                # Use Tera multiplier for actual defensive profile
+                if tera_multiplier > 1.5:
                     weak += 1
-                elif multiplier < 1:
+                    # Track if base types were weak but Tera fixes it
+                    if base_multiplier > 1.5 and tera_multiplier <= 1.5:
+                        # Tera type provides defensive utility
+                        pass
+                elif tera_multiplier < 1:
                     resist += 1
+                
+                # Track base weakness for gap analysis
+                if base_multiplier > 1.5:
+                    weak_with_tera += 1
             weak_counts[attack_type] = weak
             resist_counts[attack_type] = resist
             ranked_pairs.append((attack_type, weak))
             if attack_type in RELEVANT_OFFENSIVE_TYPES:
+                # Consider Tera types when reporting gaps
                 if weak >= 3:
                     gap_details.append(
-                        (weak, f"{attack_type.title()} offense pressures {weak} team members.")
+                        (weak, f"{attack_type.title()} offense pressures {weak} team members (after Tera).")
+                    )
+                elif weak_with_tera >= 3 and weak < weak_with_tera:
+                    # Base types are weak but Tera types help
+                    gap_details.append(
+                        (weak_with_tera, f"{attack_type.title()} offense pressures {weak_with_tera} team members (base types), but Tera types provide mitigation.")
                     )
                 if resist == 0:
                     severity = max(1, weak)
                     gap_details.append(
-                        (severity, f"No reliable resist for {attack_type.title()} attacks detected.")
+                        (severity, f"No reliable resist for {attack_type.title()} attacks detected (after Tera).")
                     )
                     suggestion = RESIST_SUGGESTIONS.get(attack_type)
                     if suggestion:
@@ -416,6 +522,10 @@ class TeamAnalyzer:
         ctx_by_name = {ctx.pokemon: ctx for ctx in contexts}
         team_map = {p.name: p for p in team.pokemon}
         base_speed_cache: Dict[str, Optional[int]] = {}
+        
+        # Store speed tiers for use in this method
+        speed_tiers = self._calculate_team_speed_tiers(team, contexts)
+        self._current_speed_tiers = speed_tiers
 
         assessments: List[ThreatAssessment] = []
         for entry in ladder_entries:
@@ -446,6 +556,9 @@ class TeamAnalyzer:
                 if not ctx:
                     continue
 
+                # Get effective types for STAB calculation
+                effective_types = self._get_effective_types(pokemon, ctx)
+                
                 for move_slug, move_data in ctx.move_data.items():
                     move_type = move_data.get("type")
                     base_power = move_data.get("base_power")
@@ -457,8 +570,13 @@ class TeamAnalyzer:
                     ):
                         continue
 
+                    # Check if move gets STAB from Tera
+                    move_type_lower = move_type.lower()
+                    is_tera_stab = pokemon.tera_type and move_type_lower == pokemon.tera_type.lower()
+                    
                     mult = damage_multiplier(move_type, entry_types)
-                    if mult >= 2.0:
+                    # Tera STAB moves are more threatening
+                    if mult >= 2.0 or (is_tera_stab and mult >= 1.5):
                         can_threaten.append(pokemon.name)
                         break
 
@@ -466,14 +584,19 @@ class TeamAnalyzer:
                 ctx = ctx_by_name.get(pokemon.name)
                 if not ctx:
                     continue
-                if ctx.types:
+                
+                # Check effective types (with Tera) for defensive matchups
+                effective_types = self._get_effective_types(pokemon, ctx)
+                
+                if effective_types:
                     stab_types = set(entry_types)
                     is_threat = False
                     for move in entry_moves:
                         move_type = (move.get("type") or "").lower()
                         if not move_type:
                             continue
-                        multiplier = damage_multiplier(move_type, ctx.types)
+                        # Check against effective types (Tera considered)
+                        multiplier = damage_multiplier(move_type, effective_types)
                         is_stab = move_type in stab_types
                         if (is_stab and multiplier > 1.5) or multiplier >= 4.0:
                             is_threat = True
@@ -493,18 +616,27 @@ class TeamAnalyzer:
                 ):
                     resist_targets.append(pokemon.name)
 
-                # speed check
+                # speed check (using speed tier engine)
                 if threat_speed is not None:
-                    own_speed = base_speed_cache.get(pokemon.name)
-                    if own_speed is None:
-                        own_speed = self._get_base_speed(pokemon)
-                        base_speed_cache[pokemon.name] = own_speed
-                    if (
-                        own_speed is not None
-                        and threat_speed - own_speed >= 10
-                        and self._infer_role(pokemon, ctx) != "Speed control"
-                    ):
-                        speed_targets.append(pokemon.name)
+                    # Get speed tier if available
+                    speed_tier = getattr(self, '_current_speed_tiers', {}).get(pokemon.name)
+                    if speed_tier:
+                        own_speed = speed_tier.raw_speed
+                        # Check if threat outspeeds even with Tailwind
+                        if threat_speed > (speed_tier.tailwind_speed or own_speed * 2):
+                            speed_targets.append(pokemon.name)
+                    else:
+                        # Fallback to old method
+                        own_speed = base_speed_cache.get(pokemon.name)
+                        if own_speed is None:
+                            own_speed = self._get_base_speed(pokemon)
+                            base_speed_cache[pokemon.name] = own_speed
+                        if (
+                            own_speed is not None
+                            and threat_speed - own_speed >= 10
+                            and self._infer_role(pokemon, ctx) != "Speed control"
+                        ):
+                            speed_targets.append(pokemon.name)
 
             if not weak_targets and not resist_targets and not speed_targets:
                 continue
@@ -520,9 +652,44 @@ class TeamAnalyzer:
             )
             reasons: List[str] = []
             if weak_targets:
-                reasons.append(
-                    f"Coverage hits {len(weak_targets)} member(s): {', '.join(sorted(weak_targets))}"
-                )
+                # Check if any weak targets have Tera types that mitigate the threat
+                mitigated = []
+                for pokemon_name in weak_targets:
+                    pokemon = team_map.get(pokemon_name)
+                    ctx = ctx_by_name.get(pokemon_name)
+                    if pokemon and pokemon.tera_type and ctx:
+                        effective_types = self._get_effective_types(pokemon, ctx)
+                        # Check if Tera type resists the threat's moves
+                        is_mitigated = False
+                        for move in entry_moves:
+                            move_type = (move.get("type") or "").lower()
+                            if move_type:
+                                mult = damage_multiplier(move_type, effective_types)
+                                if mult <= 1.0:  # Tera provides resist or better
+                                    is_mitigated = True
+                                    break
+                        if is_mitigated:
+                            mitigated.append(f"{pokemon_name} (Tera {pokemon.tera_type})")
+                
+                if mitigated:
+                    actual_weak = [w for w in weak_targets if not any(m.startswith(w) for m in mitigated)]
+                    if actual_weak:
+                        reasons.append(
+                            f"Coverage hits {len(actual_weak)} member(s): {', '.join(sorted(actual_weak))}"
+                        )
+                        reasons.append(
+                            f"Tera types mitigate threat for: {', '.join(mitigated)}"
+                        )
+                    else:
+                        reasons.append(
+                            f"Coverage would hit {len(weak_targets)} member(s), but Tera types mitigate: {', '.join(mitigated)}"
+                        )
+                        # Reduce pressure if all weak targets are mitigated
+                        pressure = max(0.1, pressure - 0.2)
+                else:
+                    reasons.append(
+                        f"Coverage hits {len(weak_targets)} member(s): {', '.join(sorted(weak_targets))}"
+                    )
             if resist_targets:
                 reasons.append(
                     f"Resists common offenses from {', '.join(sorted(resist_targets))}"
@@ -533,10 +700,34 @@ class TeamAnalyzer:
                 )
 
             if not can_threaten and weak_targets:
-                reasons.append(
-                    f"Team lacks super-effective answers against {', '.join(entry_types)}"
-                )
-                pressure = round(min(0.99, pressure + 0.3), 2)
+                # Check if Tera types provide answers
+                tera_answers = []
+                for pokemon in team.pokemon:
+                    ctx = ctx_by_name.get(pokemon.name)
+                    if not ctx or not pokemon.tera_type:
+                        continue
+                    effective_types = self._get_effective_types(pokemon, ctx)
+                    for move_slug, move_data in ctx.move_data.items():
+                        move_type = (move_data.get("type") or "").lower()
+                        base_power = move_data.get("base_power")
+                        if move_type and isinstance(base_power, (int, float)) and base_power >= 50:
+                            # Check if Tera STAB move hits threat super-effectively
+                            if move_type == pokemon.tera_type.lower():
+                                mult = damage_multiplier(move_type, entry_types)
+                                if mult >= 2.0:
+                                    tera_answers.append(f"{pokemon.name} (Tera {pokemon.tera_type} {move_data.get('name', move_slug)})")
+                                    break
+                
+                if tera_answers:
+                    reasons.append(
+                        f"Team has Tera-based answers: {', '.join(tera_answers[:2])}"
+                    )
+                    pressure = max(0.1, pressure - 0.15)
+                else:
+                    reasons.append(
+                        f"Team lacks super-effective answers against {', '.join(entry_types)}"
+                    )
+                    pressure = round(min(0.99, pressure + 0.3), 2)
             else:
                 pressure = min(0.99, pressure)
 
@@ -551,7 +742,7 @@ class TeamAnalyzer:
         return sorted(assessments, key=lambda a: a.pressure, reverse=True)[:5]
 
     def _build_pokemon_insights(
-        self, team: Team, contexts: List[PokemonContext]
+        self, team: Team, contexts: List[PokemonContext], speed_tiers: Optional[Dict[str, Any]] = None
     ) -> List[PokemonInsight]:
         insights: List[PokemonInsight] = []
         context_map = {ctx.pokemon: ctx for ctx in contexts}
@@ -595,22 +786,86 @@ class TeamAnalyzer:
                 risks.append(
                     "No ground coverage (common in VGC for hitting Steels/Electrics)"
                 )
-            if (
-                pokemon.tera_type
-                and ctx
-                and ctx.types
-                and pokemon.tera_type.lower() not in ctx.types
-            ):
-                strengths.append(
-                    f"Tera {pokemon.tera_type} offers matchup flexibility")
+            if pokemon.tera_type and ctx:
+                tera_type = pokemon.tera_type.lower()
+                base_types = [t.lower() for t in ctx.types] if ctx.types else []
+                
+                if tera_type not in base_types:
+                    # Analyze Tera type purpose
+                    tera_notes = []
+                    
+                    # Check for defensive utility (common VGC threats)
+                    if tera_type == "water":
+                        # Resists Fire (Chi-Yu, Incineroar) and Ice (Chien-Pao)
+                        tera_notes.append("resists Fire and Ice (counters Chi-Yu, Chien-Pao)")
+                    elif tera_type == "flying":
+                        # Resists Ground and Fighting
+                        tera_notes.append("resists Ground and Fighting")
+                    elif tera_type == "steel":
+                        # Resists Fairy, Ice, Dragon
+                        tera_notes.append("resists Fairy, Ice, Dragon")
+                    elif tera_type == "fairy":
+                        # Resists Fighting, Dark, Dragon
+                        tera_notes.append("resists Fighting, Dark, Dragon")
+                    elif tera_type == "ghost":
+                        # Resists Fighting, Normal
+                        tera_notes.append("resists Fighting, Normal (counters Rapid Strike Urshifu)")
+                    elif tera_type == "ground":
+                        # Resists Electric, Rock
+                        tera_notes.append("resists Electric, Rock")
+                    
+                    # Check for offensive utility (STAB on moves)
+                    has_tera_stab_move = False
+                    if ctx.move_data:
+                        for move_data in ctx.move_data.values():
+                            move_type = (move_data.get("type") or "").lower()
+                            if move_type == tera_type:
+                                has_tera_stab_move = True
+                                break
+                    
+                    if has_tera_stab_move:
+                        tera_notes.append("provides STAB on coverage moves")
+                    
+                    if tera_notes:
+                        strengths.append(
+                            f"Tera {pokemon.tera_type} {', '.join(tera_notes)}"
+                        )
+                    else:
+                        strengths.append(
+                            f"Tera {pokemon.tera_type} offers matchup flexibility"
+                        )
             if role is None:
                 risks.append("Role unclear from listed moves")
+            
+            # Add speed tier information
+            speed_tier_data = None
+            if speed_tiers and pokemon.name in speed_tiers:
+                tier = speed_tiers[pokemon.name]
+                speed_tier_data = {
+                    "base_speed": tier.base_speed,
+                    "raw_speed": tier.raw_speed,
+                    "tailwind_speed": tier.tailwind_speed,
+                    "booster_speed": tier.booster_speed,
+                    "priority_moves": tier.priority_moves,
+                    "minus_priority_moves": tier.minus_priority_moves,
+                }
+                # Add speed tier info to strengths
+                speed_info = f"Speed: {tier.raw_speed}"
+                if tier.tailwind_speed:
+                    speed_info += f" (Tailwind: {tier.tailwind_speed})"
+                if tier.booster_speed:
+                    speed_info += f" (Booster: {tier.booster_speed})"
+                if tier.priority_moves:
+                    speed_info += f" | Priority: {', '.join(tier.priority_moves)}"
+                strengths.append(speed_info)
+            
             insights.append(
                 PokemonInsight(
                     pokemon=pokemon.name,
                     role=role,
                     strengths=strengths,
                     risks=risks,
+                    speed_tier=speed_tier_data,
                 )
             )
         return insights
@@ -727,6 +982,7 @@ class TeamAnalyzer:
         defense_report: Dict[str, object],
         offensive_threats: List[ThreatAssessment],
         contexts: List[PokemonContext],
+        speed_control_analysis: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
         recommendations: List[str] = list(
             defense_report.get("recommendations", []))
@@ -750,7 +1006,7 @@ class TeamAnalyzer:
                 "Team lacks a defined primary attacker; consider adding a sweeper."
             )
 
-        offense_report = self._evaluate_offensive_coverage(contexts)
+        offense_report = self._evaluate_offensive_coverage(team, contexts)
 
         if offense_report["gaps"]:
             prioritized = [
@@ -781,14 +1037,39 @@ class TeamAnalyzer:
             recommendations.append(
                 f"Only one team member covers {weak_msg}. Add redundancy before tournaments."
             )
+        
+        # Speed control redundancy recommendations
+        if speed_control_analysis:
+            if speed_control_analysis["has_tailwind"] and speed_control_analysis["redundancy"]["tailwind"] == 1:
+                recommendations.append(
+                    "Only one Tailwind setter; consider backup speed control or redundancy."
+                )
+            if speed_control_analysis["has_trick_room"] and speed_control_analysis["redundancy"]["trick_room"] == 1:
+                recommendations.append(
+                    "Only one Trick Room setter; consider backup for consistency."
+                )
+            if not speed_control_analysis["has_tailwind"] and not speed_control_analysis["has_trick_room"]:
+                if not speed_control_analysis["has_priority"]:
+                    recommendations.append(
+                        "Team lacks speed control options; consider Tailwind, Trick Room, or priority moves."
+                    )
 
         return list(dict.fromkeys(recommendations))[:5]
 
-    def _evaluate_offensive_coverage(self, contexts: List[PokemonContext]) -> Dict[str, Any]:
-        """Analyze what types the team can effectively hit."""
+    def _evaluate_offensive_coverage(self, team: Team, contexts: List[PokemonContext]) -> Dict[str, Any]:
+        """Analyze what types the team can effectively hit, considering Tera types."""
 
         coverage_by_type: Dict[str, List[str]] = {t: [] for t in TYPE_ORDER}
+        team_map = {p.name: p for p in team.pokemon}
+        
         for ctx in contexts:
+            pokemon = team_map.get(ctx.pokemon)
+            if not pokemon:
+                continue
+            
+            # Get effective types (with Tera) for STAB calculation
+            effective_types = self._get_effective_types(pokemon, ctx)
+            
             for move_slug, move_data in ctx.move_data.items():
                 move_type = move_data.get("type")
                 base_power = move_data.get("base_power")
@@ -802,14 +1083,20 @@ class TeamAnalyzer:
                 ):
                     continue
 
+                # Check if move gets STAB from Tera type
+                move_type_lower = move_type.lower()
+                is_stab = move_type_lower in [t.lower() for t in effective_types]
+
                 for defender_type in TYPE_ORDER:
                     mult = damage_multiplier(move_type, [defender_type])
 
                     if mult > 1.0:
                         move_name = move_data.get("name") or move_slug
-                        coverage_by_type[defender_type].append(
-                            f"{ctx.pokemon} ({move_name})"
-                        )
+                        # Note if this is Tera STAB coverage
+                        coverage_note = f"{ctx.pokemon} ({move_name})"
+                        if is_stab and pokemon.tera_type and move_type_lower == pokemon.tera_type.lower():
+                            coverage_note += " [Tera STAB]"
+                        coverage_by_type[defender_type].append(coverage_note)
 
         gaps = [t for t, users in coverage_by_type.items() if not users]
 
@@ -838,8 +1125,50 @@ class TeamAnalyzer:
         return atk_ev > spa_ev and atk_ev >= 100
 
     def _team_has_speed_control(self, team: Team) -> bool:
+        """Check if team has speed control options."""
         for pokemon in team.pokemon:
             for move in pokemon.moves:
                 if move.strip().lower() in SPEED_CONTROL_MOVES:
                     return True
         return False
+    
+    def _analyze_speed_control_redundancy(
+        self, team: Team, contexts: List[PokemonContext]
+    ) -> Dict[str, Any]:
+        """Analyze speed control options and redundancy using speed tier engine."""
+        speed_tiers = self._calculate_team_speed_tiers(team, contexts)
+        tier_list = list(speed_tiers.values())
+        control_options = self.speed_tier_engine.get_speed_control_availability(tier_list, team.pokemon)
+        
+        # Count how many Pokemon have each type of speed control
+        tailwind_users = []
+        trick_room_users = []
+        priority_users = []
+        speed_reduction_users = []
+        
+        for pokemon in team.pokemon:
+            moves_lower = [m.lower() for m in pokemon.moves]
+            if any("tailwind" in m for m in moves_lower):
+                tailwind_users.append(pokemon.name)
+            if any("trick room" in m or "trick-room" in m for m in moves_lower):
+                trick_room_users.append(pokemon.name)
+            if speed_tiers.get(pokemon.name) and speed_tiers[pokemon.name].priority_moves:
+                priority_users.append(pokemon.name)
+            if any(m in ["icy wind", "electroweb", "thunder wave"] for m in moves_lower):
+                speed_reduction_users.append(pokemon.name)
+        
+        return {
+            "has_tailwind": control_options["tailwind"],
+            "has_trick_room": control_options["trick_room"],
+            "has_priority": control_options["priority"],
+            "has_speed_reduction": control_options["speed_reduction"],
+            "tailwind_users": tailwind_users,
+            "trick_room_users": trick_room_users,
+            "priority_users": priority_users,
+            "speed_reduction_users": speed_reduction_users,
+            "redundancy": {
+                "tailwind": len(tailwind_users),
+                "trick_room": len(trick_room_users),
+                "priority": len(priority_users),
+            },
+        }

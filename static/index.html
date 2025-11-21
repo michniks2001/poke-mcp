@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poke-MCP Team Analyzer</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Pokemon VGC Team Analyzer</h1>
+            <p>Paste your Smogon-format team below to analyze it</p>
+        </header>
+
+        <div class="input-section">
+            <label for="team-text">Team Text (Smogon/Showdown format):</label>
+            <textarea id="team-text" rows="15" placeholder="Paste your team here..."></textarea>
+            <div class="button-group">
+                <button id="parse-btn" onclick="parseTeam()">Parse Team</button>
+                <button id="analyze-btn" onclick="analyzeTeam()">Analyze Team</button>
+                <button id="clear-btn" onclick="clearResults()">Clear</button>
+            </div>
+        </div>
+
+        <div class="results-section">
+            <h2>Results</h2>
+            <div id="loading" class="loading" style="display: none;">Loading...</div>
+            <div id="error" class="error" style="display: none;"></div>
+            <div id="results" class="results"></div>
+        </div>
+
+        <div class="utility-section">
+            <h2>Utility Tools</h2>
+            <div class="utility-group">
+                <div class="utility-item">
+                    <label for="pokemon-species">Get Pokemon Data:</label>
+                    <input type="text" id="pokemon-species" placeholder="e.g., Hatterene">
+                    <button onclick="getPokemonData()">Get Data</button>
+                </div>
+                <div class="utility-item">
+                    <label for="attacker-type">Type Matchup:</label>
+                    <input type="text" id="attacker-type" placeholder="Attacker type">
+                    <input type="text" id="defender-type" placeholder="Defender type">
+                    <button onclick="calculateTypeMatchup()">Calculate</button>
+                </div>
+            </div>
+            <div id="utility-results" class="utility-results"></div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
+

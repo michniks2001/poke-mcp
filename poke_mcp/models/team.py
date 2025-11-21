@@ -54,6 +54,18 @@ class PokemonInsight:
     role: Optional[str] = None
     strengths: List[str] = field(default_factory=list)
     risks: List[str] = field(default_factory=list)
+    speed_tier: Optional[Dict[str, Any]] = None  # Speed tier information
+
+
+@dataclass(slots=True)
+class Strategy:
+    """Identified team strategy with summary and details."""
+
+    name: str
+    category: str  # "archetype", "win_condition", or "composition"
+    confidence: float  # 0.0 to 1.0
+    summary: str
+    details: List[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -66,4 +78,6 @@ class TeamReport:
     coverage_gaps: List[str] = field(default_factory=list)
     recommendations: List[str] = field(default_factory=list)
     top_weaknesses: List[str] = field(default_factory=list)
+    strategies: List[Strategy] = field(default_factory=list)
+    speed_tiers: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # Speed tier data by Pokemon name
     llm_summary: Optional[str] = None

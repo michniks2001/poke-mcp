@@ -13,6 +13,8 @@ dependencies = [
     "google-generativeai>=0.7.2",
     "chromadb>=0.5.5",
     "sentence-transformers>=3.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +25,7 @@ dev = [
 
 [project.scripts]
 poke-mcp = "poke_mcp.server:run"
+poke-mcp-web = "poke_mcp.web_server:run"
 
 [build-system]
 requires = ["setuptools>=65.0.0"]
